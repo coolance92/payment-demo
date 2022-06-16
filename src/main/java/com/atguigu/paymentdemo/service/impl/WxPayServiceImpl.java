@@ -77,14 +77,16 @@ public class WxPayServiceImpl implements WxPayService {
         log.info("生成订单");
 
         //生成订单
-        OrderInfo orderInfo = new OrderInfo();
-        orderInfo.setTitle("test");
-        orderInfo.setOrderNo(OrderNoUtils.getOrderNo());
-        orderInfo.setProductId(productId);
-        orderInfo.setTotalFee(1);
-        orderInfo.setOrderStatus(OrderStatus.NOTPAY.getType());
-
-        // TODO:存入数据库
+        OrderInfo orderInfo = orderInfoService.createOrderByProductId(productId);
+        String codeUrl = orderInfo.getCodeUrl();
+        if (!StringUtils.isEmpty(codeUrl)) {
+            log.info("订单已存在，二维码已保存");
+            //返回二维码
+            Map<String, Object> map = new HashMap<>();
+            map.put("codeUrl", codeUrl);
+            map.put("orderNo", orderInfo.getOrderNo());
+            return map;
+        }
 
         log.info("调用统一下单API");
         //调用统一下单API
@@ -130,7 +132,11 @@ public class WxPayServiceImpl implements WxPayService {
             //响应结果
             Map<String, String> resultMap = gson.fromJson(bodyAsString, HashMap.class);
             //二维码
-            String codeUrl = resultMap.get("code_url");
+            codeUrl = resultMap.get("code_url");
+
+            //保存二维码
+            String orderNo = orderInfo.getOrderNo();
+            orderInfoService.saveCodeUrl(orderNo, codeUrl);
 
             //返回二维码
             Map<String, Object> map = new HashMap<>();
