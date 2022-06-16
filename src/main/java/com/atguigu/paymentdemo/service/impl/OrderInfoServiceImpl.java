@@ -50,6 +50,7 @@ public class OrderInfoServiceImpl extends ServiceImpl<OrderInfoMapper, OrderInfo
 
     /**
      * 存储订单二维码
+     *
      * @param orderNo
      * @param codeUrl
      */
@@ -67,6 +68,7 @@ public class OrderInfoServiceImpl extends ServiceImpl<OrderInfoMapper, OrderInfo
 
     /**
      * 查询订单列表，并倒序查询
+     *
      * @return
      */
     @Override
@@ -74,6 +76,44 @@ public class OrderInfoServiceImpl extends ServiceImpl<OrderInfoMapper, OrderInfo
 
         QueryWrapper<OrderInfo> queryWrapper = new QueryWrapper<OrderInfo>().orderByDesc("create_time");
         return baseMapper.selectList(queryWrapper);
+    }
+
+    /**
+     * 根据订单号更新订单状态
+     *
+     * @param orderNo
+     * @param orderStatus
+     */
+    @Override
+    public void updateStatusByOrderNo(String orderNo, OrderStatus orderStatus) {
+
+        log.info("更新订单状态 ===> {}", orderStatus.getType());
+
+        QueryWrapper<OrderInfo> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("order_no", orderNo);
+
+        OrderInfo orderInfo = new OrderInfo();
+        orderInfo.setOrderStatus(orderStatus.getType());
+
+        baseMapper.update(orderInfo, queryWrapper);
+    }
+
+    /**
+     * 根据订单号获取订单状态
+     *
+     * @param orderNo
+     * @return
+     */
+    @Override
+    public String getOrderStatus(String orderNo) {
+
+        QueryWrapper<OrderInfo> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("order_no", orderNo);
+        OrderInfo orderInfo = baseMapper.selectOne(queryWrapper);
+        if (orderInfo == null) {
+            return null;
+        }
+        return orderInfo.getOrderStatus();
     }
 
     /**

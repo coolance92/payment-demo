@@ -2,24 +2,18 @@ package com.atguigu.paymentdemo.service.impl;
 
 import com.atguigu.paymentdemo.config.WxPayConfig;
 import com.atguigu.paymentdemo.entity.OrderInfo;
-import com.atguigu.paymentdemo.entity.RefundInfo;
 import com.atguigu.paymentdemo.enums.OrderStatus;
 import com.atguigu.paymentdemo.enums.wxpay.WxApiType;
 import com.atguigu.paymentdemo.enums.wxpay.WxNotifyType;
-import com.atguigu.paymentdemo.enums.wxpay.WxRefundStatus;
-import com.atguigu.paymentdemo.enums.wxpay.WxTradeState;
 import com.atguigu.paymentdemo.service.OrderInfoService;
 import com.atguigu.paymentdemo.service.PaymentInfoService;
 import com.atguigu.paymentdemo.service.RefundInfoService;
 import com.atguigu.paymentdemo.service.WxPayService;
-import com.atguigu.paymentdemo.util.HttpClientUtils;
-import com.atguigu.paymentdemo.util.OrderNoUtils;
-import com.github.wxpay.sdk.WXPayUtil;
 import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import com.wechat.pay.contrib.apache.httpclient.util.AesUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
@@ -145,6 +139,83 @@ public class WxPayServiceImpl implements WxPayService {
 
             return map;
         }
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    @Override
+    public void processOrder(Map<String, Object> bodyMap) throws GeneralSecurityException {
+        log.info("处理订单");
+
+        //解密报文
+        String plainText = decryptFromResource(bodyMap);
+
+        //将明文转换成map
+        Gson gson = new Gson();
+        HashMap<String, Object> plainTextMap = gson.fromJson(plainText, new TypeToken<Map<String, Object>>(){}.getType());
+        String orderNo = (String) plainTextMap.get("out_trade_no");
+
+
+        /*在对业务数据进行状态检查和处理之前，
+        要采用数据锁进行并发控制，
+        以避免函数重入造成的数据混乱*/
+        //尝试获取锁：
+        // 成功获取则立即返回true，获取失败则立即返回false。不必一直等待锁的释放
+        if (lock.tryLock()) {
+            try {
+                //处理重复的通知
+                //接口调用的幂等性：无论接口被调用多少次，产生的结果是一致的。
+                String orderStatus = orderInfoService.getOrderStatus(orderNo);
+                if (!OrderStatus.NOTPAY.getType().equals(orderStatus)) {
+                    return;
+                }
+
+                //模拟通知并发
+                try {
+                    TimeUnit.SECONDS.sleep(5);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+
+                //更新订单状态
+                orderInfoService.updateStatusByOrderNo(orderNo, OrderStatus.SUCCESS);
+
+                //记录支付日志
+                paymentInfoService.createPaymentInfo(plainText);
+            } finally {
+                //要主动释放锁
+                lock.unlock();
+            }
+        }
+    }
+
+    /**
+     * 对称解密
+     *
+     * @param bodyMap
+     * @return
+     */
+    private String decryptFromResource(Map<String, Object> bodyMap) throws GeneralSecurityException {
+
+        log.info("密文解密");
+
+        //通知数据
+        Map<String, String> resourceMap = (Map) bodyMap.get("resource");
+        //数据密文
+        String ciphertext = resourceMap.get("ciphertext");
+        //随机串
+        String nonce = resourceMap.get("nonce");
+        //附加数据
+        String associatedData = resourceMap.get("associated_data");
+
+        log.info("密文 ===> {}", ciphertext);
+        AesUtil aesUtil = new AesUtil(wxPayConfig.getApiV3Key().getBytes(StandardCharsets.UTF_8));
+        String plainText = aesUtil.decryptToString(associatedData.getBytes(StandardCharsets.UTF_8),
+                nonce.getBytes(StandardCharsets.UTF_8),
+                ciphertext);
+
+        log.info("明文 ===> {}", plainText);
+
+        return plainText;
     }
 
 }
