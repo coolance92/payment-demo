@@ -27,4 +27,21 @@ public class OrderInfoController {
         List<OrderInfo> list = orderInfoService.listOrderByCreateTimeDesc();
         return R.ok().data("list", list);
     }
+
+    /**
+     * 查询本地订单状态
+     * @param orderNo
+     * @return
+     */
+    @ApiOperation("查询本地订单状态")
+    @GetMapping("/query-order-status/{orderNo}")
+    public R queryOrderStatus(@PathVariable String orderNo){
+
+        String orderStatus = orderInfoService.getOrderStatus(orderNo);
+        if(OrderStatus.SUCCESS.getType().equals(orderStatus)){
+            return R.ok().setMessage("支付成功"); //支付成功
+        }
+
+        return R.ok().setCode(101).setMessage("支付中......");
+    }
 }
