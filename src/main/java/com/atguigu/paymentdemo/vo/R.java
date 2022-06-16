@@ -1,11 +1,13 @@
 package com.atguigu.paymentdemo.vo;
 
 import lombok.Data;
+import lombok.experimental.Accessors;
 
 import java.util.HashMap;
 import java.util.Map;
 
 @Data
+@Accessors(chain = true)
 public class R {
 
     private Integer code; //响应码
