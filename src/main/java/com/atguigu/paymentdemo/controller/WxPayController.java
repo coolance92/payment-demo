@@ -66,7 +66,7 @@ public class WxPayController {
             Map<String, Object> bodyMap = gson.fromJson(body, new TypeToken<Map<String, Object>>(){}.getType());
             String requestId = (String)bodyMap.get("id");
             log.info("支付通知的id ===> {}", requestId);
-            log.info("支付通知的完整数据 ===> {}", body);
+//            log.info("支付通知的完整数据 ===> {}", body);
             //int a = 9 / 0;
 
             //签名的验证

@@ -151,7 +151,7 @@ public class WxPayServiceImpl implements WxPayService {
 
         //将明文转换成map
         Gson gson = new Gson();
-        HashMap<String, Object> plainTextMap = gson.fromJson(plainText, new TypeToken<Map<String, Object>>(){}.getType());
+        Map<String, Object> plainTextMap = gson.fromJson(plainText, new TypeToken<Map<String, Object>>(){}.getType());
         String orderNo = (String) plainTextMap.get("out_trade_no");
 
 
