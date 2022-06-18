@@ -23,4 +23,8 @@ public interface WxPayService {
 
     void processRefund(Map<String, Object> bodyMap) throws Exception;
 
+    String queryBill(String billDate, String type) throws Exception;
+
+    String downloadBill(String billDate, String type) throws Exception;
+
 }

@@ -435,6 +435,7 @@ public class WxPayServiceImpl implements WxPayService {
 
     /**
      * 查询退款接口调用
+     *
      * @param refundNo
      * @return
      */
@@ -443,7 +444,7 @@ public class WxPayServiceImpl implements WxPayService {
 
         log.info("查询退款接口调用 ===> {}", refundNo);
 
-        String url =  String.format(WxApiType.DOMESTIC_REFUNDS_QUERY.getType(), refundNo);
+        String url = String.format(WxApiType.DOMESTIC_REFUNDS_QUERY.getType(), refundNo);
         url = wxPayConfig.getDomain().concat(url);
 
         //创建远程Get 请求对象
@@ -469,6 +470,7 @@ public class WxPayServiceImpl implements WxPayService {
 
     /**
      * 根据退款单号核实退款单状态
+     *
      * @param refundNo
      * @return
      */
@@ -483,12 +485,13 @@ public class WxPayServiceImpl implements WxPayService {
 
         //组装json请求体字符串
         Gson gson = new Gson();
-        Map<String, Object> resultMap = gson.fromJson(result, new TypeToken<Map<String, Object>>(){}.getType());
+        Map<String, Object> resultMap = gson.fromJson(result, new TypeToken<Map<String, Object>>() {
+        }.getType());
 
         //获取微信支付端退款状态
-        String status = (String)resultMap.get("status");
+        String status = (String) resultMap.get("status");
 
-        String orderNo = (String)resultMap.get("out_trade_no");
+        String orderNo = (String) resultMap.get("out_trade_no");
 
         if (WxRefundStatus.SUCCESS.getType().equals(status)) {
 
@@ -527,10 +530,11 @@ public class WxPayServiceImpl implements WxPayService {
 
         //将明文转换成map
         Gson gson = new Gson();
-        Map<String, Object> plainTextMap = gson.fromJson(plainText, new TypeToken<Map<String, Object>>(){}.getType());
-        String orderNo = (String)plainTextMap.get("out_trade_no");
+        Map<String, Object> plainTextMap = gson.fromJson(plainText, new TypeToken<Map<String, Object>>() {
+        }.getType());
+        String orderNo = (String) plainTextMap.get("out_trade_no");
 
-        if(lock.tryLock()){
+        if (lock.tryLock()) {
             try {
 
                 String orderStatus = orderInfoService.getOrderStatus(orderNo);
@@ -548,6 +552,94 @@ public class WxPayServiceImpl implements WxPayService {
                 //要主动释放锁
                 lock.unlock();
             }
+        }
+    }
+
+    /**
+     * 申请账单
+     *
+     * @param billDate
+     * @param type
+     * @return
+     * @throws Exception
+     */
+    @Override
+    public String queryBill(String billDate, String type) throws Exception {
+        log.warn("申请账单接口调用 {}", billDate);
+
+        String url = "";
+        if ("tradebill".equals(type)) {
+            url = WxApiType.TRADE_BILLS.getType();
+        } else if ("fundflowbill".equals(type)) {
+            url = WxApiType.FUND_FLOW_BILLS.getType();
+        } else {
+            throw new RuntimeException("不支持的账单类型");
+        }
+
+        url = wxPayConfig.getDomain().concat(url).concat("?bill_date=").concat(billDate);
+
+        //创建远程Get 请求对象
+        HttpGet httpGet = new HttpGet(url);
+        httpGet.addHeader("Accept", "application/json");
+
+        //使用wxPayClient发送请求得到响应
+
+        try (CloseableHttpResponse response = wxPayClient.execute(httpGet)) {
+
+            String bodyAsString = EntityUtils.toString(response.getEntity());
+
+            int statusCode = response.getStatusLine().getStatusCode();
+            if (statusCode == 200) {
+                log.info("成功, 申请账单返回结果 = " + bodyAsString);
+            } else if (statusCode == 204) {
+                log.info("成功");
+            } else {
+                throw new RuntimeException("申请账单异常, 响应码 = " + statusCode + ", 申请账单返回结果 = " + bodyAsString);
+            }
+
+            //获取账单下载地址
+            Gson gson = new Gson();
+            Map<String, Object> resultMap = gson.fromJson(bodyAsString, new TypeToken<Map<String, Object>>(){}.getType());
+            return (String)resultMap.get("download_url");
+
+        }
+    }
+
+    /**
+     * 下载账单
+     *
+     * @param billDate
+     * @param type
+     * @return
+     * @throws Exception
+     */
+    @Override
+    public String downloadBill(String billDate, String type) throws Exception {
+        log.warn("下载账单接口调用 {}, {}", billDate, type);
+
+        //获取账单url地址
+        String downloadUrl = this.queryBill(billDate, type);
+        //创建远程Get 请求对象
+        HttpGet httpGet = new HttpGet(downloadUrl);
+        httpGet.addHeader("Accept", "application/json");
+
+        //使用wxPayClient发送请求得到响应
+
+        try (CloseableHttpResponse response = wxPayNoSignClient.execute(httpGet)) {
+
+            String bodyAsString = EntityUtils.toString(response.getEntity());
+
+            int statusCode = response.getStatusLine().getStatusCode();
+            if (statusCode == 200) {
+                log.info("成功, 下载账单返回结果 = " + bodyAsString);
+            } else if (statusCode == 204) {
+                log.info("成功");
+            } else {
+                throw new RuntimeException("下载账单异常, 响应码 = " + statusCode + ", 下载账单返回结果 = " + bodyAsString);
+            }
+
+            return bodyAsString;
+
         }
     }
 
