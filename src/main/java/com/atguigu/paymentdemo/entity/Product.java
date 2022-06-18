@@ -5,7 +5,7 @@ import lombok.Data;
 
 @Data
 @TableName("t_product")
-public class Product extends BaseEntity{
+public class Product extends BaseEntity {
 
     private String title; //商品名称
 

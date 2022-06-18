@@ -15,4 +15,6 @@ public interface WxPayService {
 
     void checkOrderStatus(String orderNo) throws Exception;
 
+    void refund(String orderNo, String reason) throws Exception;
+
 }

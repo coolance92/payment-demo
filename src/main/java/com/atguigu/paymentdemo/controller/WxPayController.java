@@ -138,4 +138,13 @@ public class WxPayController {
         return R.ok().setMessage("查询成功").data("result", result);
 
     }
+
+    @ApiOperation("申请退款")
+    @PostMapping("/refunds/{orderNo}/{reason}")
+    public R refunds(@PathVariable String orderNo, @PathVariable String reason) throws Exception {
+
+        log.info("申请退款");
+        wxPayService.refund(orderNo, reason);
+        return R.ok();
+    }
 }

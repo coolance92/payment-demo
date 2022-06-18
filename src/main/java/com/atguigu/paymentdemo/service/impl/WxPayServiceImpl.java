@@ -2,6 +2,7 @@ package com.atguigu.paymentdemo.service.impl;
 
 import com.atguigu.paymentdemo.config.WxPayConfig;
 import com.atguigu.paymentdemo.entity.OrderInfo;
+import com.atguigu.paymentdemo.entity.RefundInfo;
 import com.atguigu.paymentdemo.enums.OrderStatus;
 import com.atguigu.paymentdemo.enums.wxpay.WxApiType;
 import com.atguigu.paymentdemo.enums.wxpay.WxNotifyType;
@@ -193,6 +194,36 @@ public class WxPayServiceImpl implements WxPayService {
     }
 
     /**
+     * 对称解密
+     *
+     * @param bodyMap
+     * @return
+     */
+    private String decryptFromResource(Map<String, Object> bodyMap) throws GeneralSecurityException {
+
+        log.info("密文解密");
+
+        //通知数据
+        Map<String, String> resourceMap = (Map) bodyMap.get("resource");
+        //数据密文
+        String ciphertext = resourceMap.get("ciphertext");
+        //随机串
+        String nonce = resourceMap.get("nonce");
+        //附加数据
+        String associatedData = resourceMap.get("associated_data");
+
+        log.info("密文 ===> {}", ciphertext);
+        AesUtil aesUtil = new AesUtil(wxPayConfig.getApiV3Key().getBytes(StandardCharsets.UTF_8));
+        String plainText = aesUtil.decryptToString(associatedData.getBytes(StandardCharsets.UTF_8),
+                nonce.getBytes(StandardCharsets.UTF_8),
+                ciphertext);
+
+        log.info("明文 ===> {}", plainText);
+
+        return plainText;
+    }
+
+    /**
      * 用户取消订单
      *
      * @param orderNo
@@ -308,7 +339,7 @@ public class WxPayServiceImpl implements WxPayService {
         }.getType());
 
         //获取微信支付端的订单状态
-        String tradeState = (String)resultMap.get("trade_state");
+        String tradeState = (String) resultMap.get("trade_state");
 
         //判断订单状态
         if (WxTradeState.SUCCESS.getType().equals(tradeState)) {
@@ -334,33 +365,71 @@ public class WxPayServiceImpl implements WxPayService {
     }
 
     /**
-     * 对称解密
+     * 退款
      *
-     * @param bodyMap
-     * @return
+     * @param orderNo
+     * @param reason
+     * @throws IOException
      */
-    private String decryptFromResource(Map<String, Object> bodyMap) throws GeneralSecurityException {
+    @Transactional(rollbackFor = Exception.class)
+    @Override
+    public void refund(String orderNo, String reason) throws Exception {
 
-        log.info("密文解密");
+        log.info("创建退款单记录");
+        //根据订单编号创建退款单
+        RefundInfo refundsInfo = refundsInfoService.createRefundByOrderNo(orderNo, reason);
 
-        //通知数据
-        Map<String, String> resourceMap = (Map) bodyMap.get("resource");
-        //数据密文
-        String ciphertext = resourceMap.get("ciphertext");
-        //随机串
-        String nonce = resourceMap.get("nonce");
-        //附加数据
-        String associatedData = resourceMap.get("associated_data");
+        log.info("调用退款API");
 
-        log.info("密文 ===> {}", ciphertext);
-        AesUtil aesUtil = new AesUtil(wxPayConfig.getApiV3Key().getBytes(StandardCharsets.UTF_8));
-        String plainText = aesUtil.decryptToString(associatedData.getBytes(StandardCharsets.UTF_8),
-                nonce.getBytes(StandardCharsets.UTF_8),
-                ciphertext);
+        //调用统一下单API
+        String url = wxPayConfig.getDomain().concat(WxApiType.DOMESTIC_REFUNDS.getType());
+        HttpPost httpPost = new HttpPost(url);
 
-        log.info("明文 ===> {}", plainText);
+        // 请求body参数
+        Gson gson = new Gson();
+        Map<String, Object> paramsMap = new HashMap<>();
+        paramsMap.put("out_trade_no", orderNo);//订单编号
+        paramsMap.put("out_refund_no", refundsInfo.getRefundNo());//退款单编号
+        paramsMap.put("reason", reason);//退款原因
+        paramsMap.put("notify_url", wxPayConfig.getNotifyDomain().concat(WxNotifyType.REFUND_NOTIFY.getType()));//退款通知地址
 
-        return plainText;
+        Map<String, Object> amountMap = new HashMap<>();
+        amountMap.put("refund", refundsInfo.getRefund());//退款金额
+        amountMap.put("total", refundsInfo.getTotalFee());//原订单金额
+        amountMap.put("currency", "CNY");//退款币种
+        paramsMap.put("amount", amountMap);
+
+        //将参数转换成json字符串
+        String jsonParams = gson.toJson(paramsMap);
+        log.info("请求参数 ===> {}" + jsonParams);
+
+        StringEntity entity = new StringEntity(jsonParams, "utf-8");
+        entity.setContentType("application/json");//设置请求报文格式
+        httpPost.setEntity(entity);//将请求报文放入请求对象
+        httpPost.setHeader("Accept", "application/json");//设置响应报文格式
+
+        //完成签名并执行请求，并完成验签
+
+        try (CloseableHttpResponse response = wxPayClient.execute(httpPost)) {
+
+            //解析响应结果
+            String bodyAsString = EntityUtils.toString(response.getEntity());
+            int statusCode = response.getStatusLine().getStatusCode();
+            if (statusCode == 200) {
+                log.info("成功, 退款返回结果 = " + bodyAsString);
+            } else if (statusCode == 204) {
+                log.info("成功");
+            } else {
+                throw new RuntimeException("退款异常, 响应码 = " + statusCode + ", 退款返回结果 = " + bodyAsString);
+            }
+
+            //更新订单状态
+            orderInfoService.updateStatusByOrderNo(orderNo, OrderStatus.REFUND_PROCESSING);
+
+            //更新退款单
+            refundsInfoService.updateRefund(bodyAsString);
+
+        }
     }
 
 }

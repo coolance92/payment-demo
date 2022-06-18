@@ -147,9 +147,22 @@ public class OrderInfoServiceImpl extends ServiceImpl<OrderInfoMapper, OrderInfo
         queryWrapper.eq("order_status", OrderStatus.NOTPAY.getType());
         queryWrapper.le("create_time", instant);
 
-        List<OrderInfo> orderInfoList = baseMapper.selectList(queryWrapper);
+        return baseMapper.selectList(queryWrapper);
 
-        return orderInfoList;
+    }
+
+    /**
+     * 根据订单号获取订单
+     * @param orderNo
+     * @return
+     */
+    @Override
+    public OrderInfo getOrderByOrderNo(String orderNo) {
+
+        QueryWrapper<OrderInfo> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("order_no", orderNo);
+        return baseMapper.selectOne(queryWrapper);
+
     }
 
 }
