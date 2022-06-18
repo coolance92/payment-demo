@@ -1,6 +1,7 @@
 package com.atguigu.paymentdemo.task;
 
 import com.atguigu.paymentdemo.entity.OrderInfo;
+import com.atguigu.paymentdemo.entity.RefundInfo;
 import com.atguigu.paymentdemo.service.OrderInfoService;
 import com.atguigu.paymentdemo.service.RefundInfoService;
 import com.atguigu.paymentdemo.service.WxPayService;
@@ -61,7 +62,7 @@ public class WxPayTask {
     /**
      * 从第0秒开始每隔30秒执行1次，查询创建超过5分钟，并且未成功的退款单
      */
-    /*@Scheduled(cron = "0/30 * * * * ?")
+    @Scheduled(cron = "0/30 * * * * ?")
     public void refundConfirm() throws Exception {
         log.info("refundConfirm 被执行......");
 
@@ -75,6 +76,6 @@ public class WxPayTask {
             //核实订单状态：调用微信支付查询退款接口
             wxPayService.checkRefundStatus(refundNo);
         }
-    }*/
+    }
 
 }

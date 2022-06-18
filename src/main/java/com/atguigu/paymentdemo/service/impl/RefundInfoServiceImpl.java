@@ -2,6 +2,7 @@ package com.atguigu.paymentdemo.service.impl;
 
 import com.atguigu.paymentdemo.entity.OrderInfo;
 import com.atguigu.paymentdemo.entity.RefundInfo;
+import com.atguigu.paymentdemo.enums.wxpay.WxRefundStatus;
 import com.atguigu.paymentdemo.mapper.RefundInfoMapper;
 import com.atguigu.paymentdemo.service.OrderInfoService;
 import com.atguigu.paymentdemo.service.RefundInfoService;
@@ -13,6 +14,9 @@ import com.google.gson.reflect.TypeToken;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -82,5 +86,24 @@ public class RefundInfoServiceImpl extends ServiceImpl<RefundInfoMapper, RefundI
 
         //更新退款单
         baseMapper.update(refundInfo, queryWrapper);
+
+    }
+
+    /**
+     * 找出申请退款超过minutes分钟并且未成功的退款单
+     * @param minutes
+     * @return
+     */
+    @Override
+    public List<RefundInfo> getNoRefundOrderByDuration(int minutes) {
+
+        //minutes分钟之前的时间
+        Instant instant = Instant.now().minus(Duration.ofMinutes(minutes));
+
+        QueryWrapper<RefundInfo> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("refund_status", WxRefundStatus.PROCESSING.getType());
+        queryWrapper.le("create_time", instant);
+        return baseMapper.selectList(queryWrapper);
+
     }
 }

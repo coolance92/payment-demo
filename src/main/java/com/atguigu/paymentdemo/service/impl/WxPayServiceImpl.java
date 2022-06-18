@@ -6,6 +6,7 @@ import com.atguigu.paymentdemo.entity.RefundInfo;
 import com.atguigu.paymentdemo.enums.OrderStatus;
 import com.atguigu.paymentdemo.enums.wxpay.WxApiType;
 import com.atguigu.paymentdemo.enums.wxpay.WxNotifyType;
+import com.atguigu.paymentdemo.enums.wxpay.WxRefundStatus;
 import com.atguigu.paymentdemo.enums.wxpay.WxTradeState;
 import com.atguigu.paymentdemo.service.OrderInfoService;
 import com.atguigu.paymentdemo.service.PaymentInfoService;
@@ -463,6 +464,90 @@ public class WxPayServiceImpl implements WxPayService {
 
             return bodyAsString;
 
+        }
+    }
+
+    /**
+     * 根据退款单号核实退款单状态
+     * @param refundNo
+     * @return
+     */
+    @Transactional(rollbackFor = Exception.class)
+    @Override
+    public void checkRefundStatus(String refundNo) throws Exception {
+
+        log.warn("根据退款单号核实退款单状态 ===> {}", refundNo);
+
+        //调用查询退款单接口
+        String result = this.queryRefund(refundNo);
+
+        //组装json请求体字符串
+        Gson gson = new Gson();
+        Map<String, Object> resultMap = gson.fromJson(result, new TypeToken<Map<String, Object>>(){}.getType());
+
+        //获取微信支付端退款状态
+        String status = (String)resultMap.get("status");
+
+        String orderNo = (String)resultMap.get("out_trade_no");
+
+        if (WxRefundStatus.SUCCESS.getType().equals(status)) {
+
+            log.warn("核实订单已退款成功 ===> {}", refundNo);
+
+            //如果确认退款成功，则更新订单状态
+            orderInfoService.updateStatusByOrderNo(orderNo, OrderStatus.REFUND_SUCCESS);
+
+            //更新退款单
+            refundsInfoService.updateRefund(result);
+        }
+
+        if (WxRefundStatus.ABNORMAL.getType().equals(status)) {
+
+            log.warn("核实订单退款异常  ===> {}", refundNo);
+
+            //如果确认退款成功，则更新订单状态
+            orderInfoService.updateStatusByOrderNo(orderNo, OrderStatus.REFUND_ABNORMAL);
+
+            //更新退款单
+            refundsInfoService.updateRefund(result);
+        }
+    }
+
+    /**
+     * 处理退款单
+     */
+    @Transactional(rollbackFor = Exception.class)
+    @Override
+    public void processRefund(Map<String, Object> bodyMap) throws Exception {
+
+        log.info("退款单");
+
+        //解密报文
+        String plainText = decryptFromResource(bodyMap);
+
+        //将明文转换成map
+        Gson gson = new Gson();
+        Map<String, Object> plainTextMap = gson.fromJson(plainText, new TypeToken<Map<String, Object>>(){}.getType());
+        String orderNo = (String)plainTextMap.get("out_trade_no");
+
+        if(lock.tryLock()){
+            try {
+
+                String orderStatus = orderInfoService.getOrderStatus(orderNo);
+                if (!OrderStatus.REFUND_PROCESSING.getType().equals(orderStatus)) {
+                    return;
+                }
+
+                //更新订单状态
+                orderInfoService.updateStatusByOrderNo(orderNo, OrderStatus.REFUND_SUCCESS);
+
+                //更新退款单
+                refundsInfoService.updateRefund(plainText);
+
+            } finally {
+                //要主动释放锁
+                lock.unlock();
+            }
         }
     }
 

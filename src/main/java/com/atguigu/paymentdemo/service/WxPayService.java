@@ -19,4 +19,8 @@ public interface WxPayService {
 
     String queryRefund(String orderNo) throws Exception;
 
+    void checkRefundStatus(String refundNo) throws Exception;
+
+    void processRefund(Map<String, Object> bodyMap) throws Exception;
+
 }
