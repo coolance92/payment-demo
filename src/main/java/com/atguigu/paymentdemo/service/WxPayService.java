@@ -13,4 +13,6 @@ public interface WxPayService {
 
     String queryOrder(String orderNo) throws Exception;
 
+    void checkOrderStatus(String orderNo) throws Exception;
+
 }

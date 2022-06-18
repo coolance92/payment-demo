@@ -5,6 +5,7 @@ import com.atguigu.paymentdemo.entity.OrderInfo;
 import com.atguigu.paymentdemo.enums.OrderStatus;
 import com.atguigu.paymentdemo.enums.wxpay.WxApiType;
 import com.atguigu.paymentdemo.enums.wxpay.WxNotifyType;
+import com.atguigu.paymentdemo.enums.wxpay.WxTradeState;
 import com.atguigu.paymentdemo.service.OrderInfoService;
 import com.atguigu.paymentdemo.service.PaymentInfoService;
 import com.atguigu.paymentdemo.service.RefundInfoService;
@@ -274,7 +275,7 @@ public class WxPayServiceImpl implements WxPayService {
             } else if (statusCode == 204) { //处理成功，无返回Body
                 log.info("成功");
             } else {
-                log.info("查单接口调用,响应码 = " + statusCode+ ",返回结果 = " + bodyAsString);
+                log.info("查单接口调用,响应码 = " + statusCode + ",返回结果 = " + bodyAsString);
                 throw new IOException("request failed");
             }
 
@@ -282,6 +283,52 @@ public class WxPayServiceImpl implements WxPayService {
 
         } finally {
             response.close();
+        }
+
+    }
+
+    /**
+     * 根据订单号查询微信支付查单接口，核实订单状态
+     * 如果订单已支付，则更新商户端订单状态，并记录支付日志
+     * 如果订单未支付，则调用关单接口关闭订单，并更新商户端订单状态
+     *
+     * @param orderNo
+     */
+    @Transactional(rollbackFor = Exception.class)
+    @Override
+    public void checkOrderStatus(String orderNo) throws Exception {
+
+        log.warn("根据订单号核实订单状态 ===> {}", orderNo);
+
+        //调用微信支付查单接口
+        String result = this.queryOrder(orderNo);
+
+        Gson gson = new Gson();
+        Map<String, Object> resultMap = gson.fromJson(result, new TypeToken<Map<String, Object>>() {
+        }.getType());
+
+        //获取微信支付端的订单状态
+        String tradeState = (String)resultMap.get("trade_state");
+
+        //判断订单状态
+        if (WxTradeState.SUCCESS.getType().equals(tradeState)) {
+
+            log.warn("核实订单已支付 ===> {}", orderNo);
+
+            //如果确认订单已支付则更新本地订单状态
+            orderInfoService.updateStatusByOrderNo(orderNo, OrderStatus.SUCCESS);
+            //记录支付日志
+            paymentInfoService.createPaymentInfo(result);
+        }
+
+        if (WxTradeState.NOTPAY.getType().equals(tradeState)) {
+            log.warn("核实订单未支付 ===> {}", orderNo);
+
+            //如果订单未支付，则调用关单接口
+            this.closeOrder(orderNo);
+
+            //更新本地订单状态
+            orderInfoService.updateStatusByOrderNo(orderNo, OrderStatus.CLOSED);
         }
 
     }

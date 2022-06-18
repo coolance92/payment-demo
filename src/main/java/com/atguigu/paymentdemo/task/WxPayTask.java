@@ -53,7 +53,7 @@ public class WxPayTask {
             log.warn("超时订单 ===> {}", orderNo);
 
             //核实订单状态：调用微信支付查单接口
-            //wxPayService.checkOrderStatus(orderNo);
+            wxPayService.checkOrderStatus(orderNo);
         }
     }
 
