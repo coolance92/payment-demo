@@ -27,4 +27,6 @@ public interface WxPayService {
 
     String downloadBill(String billDate, String type) throws Exception;
 
+    Map<String, Object> nativePayV2(Long productId, String remoteAddr) throws Exception;
+
 }
